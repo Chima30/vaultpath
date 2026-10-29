@@ -6,14 +6,17 @@ import { api } from "@/lib/client-api";
 export function InvestigationActions({ investigationId, latestAssessmentId, hasEvidence }: { investigationId: string; latestAssessmentId: string | null; hasEvidence: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
-  const [msg, setMsg] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
+  const [msg, setMsg] = useState<{ tone: "ok" | "warn" | "bad"; text: string } | null>(null);
 
   async function run(key: string, url: string, describe: (d: any) => string) { // eslint-disable-line @typescript-eslint/no-explicit-any
     setBusy(key);
     setMsg(null);
     const r = await api(url, "POST");
     setBusy(null);
-    if (!r.ok) return setMsg({ tone: "bad", text: r.error });
+    if (!r.ok) {
+      router.refresh(); // part of the evidence may have been stored
+      return setMsg({ tone: r.code === "rate_limited" ? "warn" : "bad", text: r.error });
+    }
     setMsg({ tone: "ok", text: describe(r.data) });
     router.refresh();
   }
@@ -31,7 +34,7 @@ export function InvestigationActions({ investigationId, latestAssessmentId, hasE
           {busy === "mem" ? "Submitting…" : "3. Save finding to memory"}
         </button>
       </div>
-      {msg && <p role="status" className={`mt-3 text-sm ${msg.tone === "ok" ? "text-ok" : "text-danger"}`}>{msg.text}</p>}
+      {msg && <p role="status" className={`mt-3 text-sm ${msg.tone === "ok" ? "text-ok" : msg.tone === "warn" ? "text-brass" : "text-danger"}`}>{msg.text}</p>}
     </div>
   );
 }

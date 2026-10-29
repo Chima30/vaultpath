@@ -13,7 +13,7 @@ Stack: Next.js 15 (App Router) · TypeScript · Tailwind CSS 3 · Supabase (Post
 | `next build` and TypeScript typecheck | Passed in the build sandbox |
 | Access gate (401 without password), not-configured handling, no secrets in client bundle | Checked locally |
 | **Walrus Memory Mainnet writes and recall** | Relayer reachability confirmed by the project owner; writes, confirmation and recall still need to be proven (see section 6) |
-| Tatum Sui gRPC client | Exercised against a **local mock** gRPC server over TLS (request encoding, `x-api-key` metadata, streaming, error mapping). **NOT yet verified against Tatum itself.** |
+| Tatum Sui gRPC client | Exercised against a **local mock** HTTP/2 + TLS server returning real HTTP 429/503/401 responses (pacing, retry/backoff, `Retry-After`, error classification, no fabricated data). **NOT yet verified against Tatum itself.** |
 | **Tatum Sui Mainnet live check** | **Pending: run it from the deployed app. It only turns green when Tatum answers all four calls.** |
 | **Supabase migration** | **NOT yet applied to a real project.** |
 | 10 confirmed Mainnet memories | **Not done.** Only you can do this with your own credentials. |
@@ -83,6 +83,14 @@ namespace names are public onchain. Do not store personal data you cannot share.
 5. `ListTransactions` is a recent Sui gRPC method. If Tatum's node does not serve it, the live check shows "partly working",
    evidence fetch stores balances only and reports the error. Nothing is invented.
 6. The descriptor file was generated with `pbjs -t json --keep-case` (keep-case matters: without it multi-word fields such as `read_mask` are silently dropped).
+
+### Rate limits (HTTP 429)
+
+- Tatum documents HTTP 429 as the account reaching its maximum requests per second (https://docs.tatum.io/docs/error-429) and lists the Free plan at 3 requests/second (https://docs.tatum.io/docs/plans-limits). gRPC reports a gateway 429 as `UNAVAILABLE`. A malformed request is answered by the node with `INVALID_ARGUMENT`, never with a 429.
+- VaultPath spaces Tatum calls at least 0.4s apart (about 2.5/s) and runs the live-check calls one after another. Spacing is per server instance; separate Vercel instances do not coordinate.
+- A 429 is retried at most **3 times** (1s-ish exponential backoff, capped at 4s, with jitter), honouring `Retry-After` up to 8s; if Tatum asks for longer, the app stops and says so. Transient `UNAVAILABLE` (502/503/504, connection errors) is retried at most 2 times. Authentication, invalid-argument, unsupported, not-found and timeout errors are **never** retried. One call spends at most 15s retrying.
+- A rate-limited balance request is shown as "rate limited", never as a balance. Evidence fetch stores whatever succeeded (for example transaction history), skips what failed, and returns an error naming exactly what was not stored.
+- If a 429 persists even when calls are spaced, you are hitting a plan or key limit rather than a burst: check your plan and any per-key credit limits in the Tatum dashboard. The live check shows any `Retry-After` / rate-limit header Tatum sends.
 
 ## 5. Deploy on Vercel (all in the browser)
 

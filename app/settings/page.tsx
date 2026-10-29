@@ -48,6 +48,9 @@ export default function SettingsPage() {
           <Notice title="Heuristic assessments">
             Assessments are a transparent rule-based comparison between recalled memory text and on-chain counterparties. There is no machine-learning model, and a match is a lead rather than proof.
           </Notice>
+          <Notice title="Tatum rate limits (HTTP 429)">
+            Tatum documents HTTP 429 as the per-second request limit being reached, and lists the Free plan at 3 requests per second. VaultPath spaces its Tatum calls about 0.4s apart and retries a 429 at most 3 times with exponential backoff, honouring Retry-After up to 8s. Spacing is per server instance, so heavy parallel use can still be throttled. A rate-limited request is shown as rate limited, never as a result.
+          </Notice>
           <Notice title="Transaction history depends on a newer Sui gRPC method">
             Address history uses LedgerService/ListTransactions, a recent addition to the Sui gRPC API. If Tatum&apos;s node does not serve it, evidence fetch stores balances only and reports the error instead of inventing history.
           </Notice>

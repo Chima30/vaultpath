@@ -72,7 +72,7 @@ export default async function InvestigationPage({ params }: { params: Promise<{ 
         <Panel title="Balances (Tatum)" action={balEv ? <Badge>checkpoint {balEv.latest_checkpoint}</Badge> : undefined}>
           {balances.length > 0 ? (
             <ul className="space-y-1.5 text-sm">{balances.map((b) => <li key={b.coinType} className="flex justify-between gap-3"><span className="min-w-0 truncate font-mono text-xs text-muted" title={b.coinType}>{b.coinType}</span><span className="font-mono text-text">{b.totalBalance}</span></li>)}</ul>
-          ) : <p className="text-sm text-muted">{balEv ? "The address holds no coins." : "No evidence fetched yet."}</p>}
+          ) : <p className="text-sm text-muted">{balEv ? "The address holds no coins." : txEv ? "Balances are not stored for this case: the balance request did not succeed on the last fetch (for example it was rate limited). Fetch evidence again in a few seconds." : "No evidence fetched yet."}</p>}
         </Panel>
         <Panel title={`Counterparties (${cps.length})`}>
           {cps.length > 0 ? (
