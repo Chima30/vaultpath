@@ -3,6 +3,11 @@ import "server-only";
 // All secrets are read here, on the server, from process.env. Nothing in this
 // file or anything importing it can be bundled into client code ("server-only").
 
+function toGrpcTarget(raw?: string): string {
+  const v = (raw || "sui-mainnet-grpc.gateway.tatum.io").trim().replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  return v.includes(":") ? v : `${v}:443`;
+}
+
 export const config = {
   supabase: {
     url: process.env.SUPABASE_URL,
@@ -16,7 +21,10 @@ export const config = {
   },
   tatum: {
     apiKey: process.env.TATUM_API_KEY,
-    rpcUrl: process.env.TATUM_SUI_RPC_URL || "https://sui-mainnet.gateway.tatum.io",
+    // Sui is read over gRPC (HTTP/2 + TLS). Host only; the scheme is optional and
+    // the port defaults to 443. TATUM_SUI_RPC_URL (the old JSON-RPC host) is ignored.
+    grpcTarget: toGrpcTarget(process.env.TATUM_SUI_GRPC_URL),
+    legacyRpcUrlSet: Boolean(process.env.TATUM_SUI_RPC_URL),
   },
   accessPasswordSet: Boolean(process.env.VAULTPATH_ACCESS_PASSWORD),
 };
@@ -29,8 +37,9 @@ export type ConfigStatus = {
   relayerUrl: string;
   relayerIsMainnet: boolean;
   namespace: string;
-  tatumUrl: string;
+  tatumTarget: string;
   tatumIsMainnet: boolean;
+  tatumLegacyRpcUrlSet: boolean;
 };
 
 export function configStatus(): ConfigStatus {
@@ -43,7 +52,8 @@ export function configStatus(): ConfigStatus {
     relayerUrl: relayer,
     relayerIsMainnet: relayer.startsWith("https://relayer.memory.walrus.xyz"),
     namespace: config.memwal.namespace,
-    tatumUrl: config.tatum.rpcUrl,
-    tatumIsMainnet: config.tatum.rpcUrl.includes("sui-mainnet"),
+    tatumTarget: config.tatum.grpcTarget,
+    tatumIsMainnet: config.tatum.grpcTarget.startsWith("sui-mainnet-grpc."),
+    tatumLegacyRpcUrlSet: config.tatum.legacyRpcUrlSet,
   };
 }

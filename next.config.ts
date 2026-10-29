@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  serverExternalPackages: ["@grpc/grpc-js", "@grpc/proto-loader", "protobufjs"],
   async headers() {
     return [
       {

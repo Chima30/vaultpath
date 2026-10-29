@@ -12,8 +12,9 @@ Stack: Next.js 15 (App Router) · TypeScript · Tailwind CSS 3 · Supabase (Post
 | --- | --- |
 | `next build` and TypeScript typecheck | Passed in the build sandbox |
 | Access gate (401 without password), not-configured handling, no secrets in client bundle | Checked locally |
-| **Walrus Memory Mainnet writes and recall** | **Written from the official SDK docs. NOT yet tested against the real service.** |
-| **Tatum Sui Mainnet RPC calls** | **Written from Tatum docs. NOT yet tested against the real service.** |
+| **Walrus Memory Mainnet writes and recall** | Relayer reachability confirmed by the project owner; writes, confirmation and recall still need to be proven (see section 6) |
+| Tatum Sui gRPC client | Exercised against a **local mock** gRPC server over TLS (request encoding, `x-api-key` metadata, streaming, error mapping). **NOT yet verified against Tatum itself.** |
+| **Tatum Sui Mainnet live check** | **Pending: run it from the deployed app. It only turns green when Tatum answers all four calls.** |
 | **Supabase migration** | **NOT yet applied to a real project.** |
 | 10 confirmed Mainnet memories | **Not done.** Only you can do this with your own credentials. |
 
@@ -27,8 +28,8 @@ hackathon proof list from stored data, so it stays "not met" until it is true.
    VaultPath saves a receipt as `accepted`, and **Confirm pending writes** calls `getRememberStatus()`;
    only a relayer answer of `done` with a `blob_id` turns a receipt into `done` (stored).
 2. **Investigations**: opening a case on a Sui address, then **Fetch on-chain evidence** calls
-   `sui_getLatestCheckpointSequenceNumber`, `suix_getAllBalances` and `suix_queryTransactionBlocks`
-   through `https://sui-mainnet.gateway.tatum.io`, and stores what came back.
+   `LedgerService/GetServiceInfo`, `LedgerService/GetCheckpoint`, `StateService/ListBalances` and `LedgerService/ListTransactions`
+   over **gRPC** through `sui-mainnet-grpc.gateway.tatum.io:443`, and stores what came back.
 3. **Recall and assess** runs `recall()` for the subject and its top counterparties, then compares the
    recalled text with the counterparties using a transparent rule-based score (see `lib/assess.ts`).
    Each point of the score is listed. It is a heuristic, not a model and not proof.
@@ -70,10 +71,18 @@ only server routes using the service-role key can.
 Memory text is Seal-encrypted by the relayer pipeline, but the relayer sees plaintext in the default flow, and
 namespace names are public onchain. Do not store personal data you cannot share.
 
-## 4. Tatum
+## 4. Tatum (Sui Mainnet over gRPC)
 
 1. Create an API key at https://dashboard.tatum.io with Sui Mainnet access.
-2. Endpoint used: `https://sui-mainnet.gateway.tatum.io`, header `x-api-key`.
+2. Protocol: **gRPC** (HTTP/2 + TLS) at `sui-mainnet-grpc.gateway.tatum.io:443`. The key is sent as `x-api-key` gRPC metadata.
+   Docs: https://docs.tatum.io/reference/sui-grpc
+3. Sui JSON-RPC is deprecated and is **not used**. Sending JSON-RPC to the old `sui-mainnet.gateway.tatum.io` host is what produced `HTTP 415`.
+4. Methods used (official protos from https://github.com/MystenLabs/sui-apis, compiled into `lib/sui-grpc-descriptor.json`):
+   `LedgerService/GetServiceInfo` (confirms the chain is mainnet), `LedgerService/GetCheckpoint`,
+   `StateService/ListBalances`, `LedgerService/ListTransactions` (sender OR affected-address filter, newest first).
+5. `ListTransactions` is a recent Sui gRPC method. If Tatum's node does not serve it, the live check shows "partly working",
+   evidence fetch stores balances only and reports the error. Nothing is invented.
+6. The descriptor file was generated with `pbjs -t json --keep-case` (keep-case matters: without it multi-word fields such as `read_mask` are silently dropped).
 
 ## 5. Deploy on Vercel (all in the browser)
 
@@ -87,14 +96,15 @@ namespace names are public onchain. Do not store personal data you cannot share.
 | `MEMWAL_ACCOUNT_ID`, `MEMWAL_DELEGATE_KEY` | yes | From memory.walrus.xyz |
 | `MEMWAL_RELAYER_URL` | no | Defaults to the Mainnet relayer |
 | `MEMWAL_NAMESPACE` | no | Defaults to `vaultpath` |
-| `TATUM_API_KEY` | yes | Server only |
-| `TATUM_SUI_RPC_URL` | no | Defaults to the Mainnet gateway |
+| `TATUM_API_KEY` | yes | Server only. Same key as before |
+| `TATUM_SUI_GRPC_URL` | no | Defaults to `sui-mainnet-grpc.gateway.tatum.io:443`. Leave unset |
+| `TATUM_SUI_RPC_URL` | no | **Obsolete and ignored.** Delete it |
 
 3. Deploy. Never add a `NEXT_PUBLIC_` prefix to any of these.
 
 ## 6. Prove the integrations (do these in order)
 
-1. Overview > **Run live check** for Tatum and Walrus. Both must turn green. If one fails, the error shown is the real one.
+1. Overview > **Run live check** for Tatum and Walrus. Tatum lists each of its four calls with its own result; green means all four succeeded and the node reported `mainnet`. If one fails, the error shown is the real one.
 2. Case Memory > write at least **10** memories. The button **Write 10 synthetic sample memories** is a shortcut
    (clearly labelled synthetic typology notes); mixing in your own real case notes is better.
 3. Press **Confirm pending writes** until the vault shows 10 stored. The status endpoint also reports an independent count from the relayer.
@@ -110,9 +120,9 @@ namespace names are public onchain. Do not store personal data you cannot share.
 
 - One shared password protects the whole app; there are no per-user accounts.
 - Recall is semantic. Hex addresses embed poorly, so write the full address in the note; the assessment then matches addresses exactly.
-- Sui is retiring JSON-RPC upstream in favour of gRPC/GraphQL. Tatum still lists Sui JSON-RPC; `lib/tatum.ts` is the one file to port if that changes.
+- Tatum's REST Data API does not list Sui for transaction history, so gRPC `ListTransactions` is the only history source here.
+- The gRPC channel uses `@grpc/grpc-js` on the Vercel Node.js runtime (HTTP/2 outbound). It is not usable from the Edge runtime.
 - `@mysten-incubation/memwal` is a beta SDK; pin and re-test when upgrading.
-- The Tatum query uses `FromOrToAddress`; confirm Tatum's gateway accepts it for your plan.
 
 ## Project layout
 
@@ -120,7 +130,8 @@ namespace names are public onchain. Do not store personal data you cannot share.
 app/                 pages (Overview, Investigations, Case Memory, Settings) and app/api routes
 app/api/             health, tatum/status, investigations, memory/{remember,recall,sync,status,receipts}, assessments
 components/          UI and client forms (no secrets, no storage)
-lib/                 server-only integrations: supabase, memwal, tatum, assess, write-memory
+lib/                 server-only integrations: supabase, memwal, tatum (gRPC), assess, write-memory
+lib/sui-grpc-descriptor.json   compiled official Sui protobuf definitions (do not edit by hand)
 middleware.ts        access gate
 supabase/migrations  SQL schema and row-level security
 ```

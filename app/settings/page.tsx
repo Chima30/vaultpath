@@ -32,14 +32,15 @@ export default function SettingsPage() {
         <dl className="space-y-3 text-sm">
           <div><dt className="text-muted">Walrus Memory relayer</dt><dd className="break-all font-mono text-xs text-text">{cfg.relayerUrl} {cfg.relayerIsMainnet ? <Badge tone="ok">mainnet</Badge> : <Badge tone="bad">not mainnet</Badge>}</dd></div>
           <div><dt className="text-muted">Memory namespace</dt><dd className="font-mono text-xs text-text">{cfg.namespace}</dd></div>
-          <div><dt className="text-muted">Tatum Sui RPC</dt><dd className="break-all font-mono text-xs text-text">{cfg.tatumUrl} {cfg.tatumIsMainnet ? <Badge tone="ok">mainnet</Badge> : <Badge tone="bad">not mainnet</Badge>}</dd></div>
+          <div><dt className="text-muted">Tatum Sui Mainnet (gRPC)</dt><dd className="break-all font-mono text-xs text-text">{cfg.tatumTarget} {cfg.tatumIsMainnet ? <Badge tone="ok">mainnet host</Badge> : <Badge tone="bad">not the Tatum mainnet gRPC host</Badge>}</dd></div>
+          {cfg.tatumLegacyRpcUrlSet && <div><dt className="text-muted">TATUM_SUI_RPC_URL</dt><dd className="text-xs text-brass">Set but ignored. Sui JSON-RPC is no longer used; you can delete this variable.</dd></div>}
         </dl>
       </Panel>
 
       <Panel title="Incomplete or untested">
         <div className="space-y-3">
           <Notice title="Not yet tested against the real services">
-            Walrus Memory writes and recall, and the Tatum Sui queries (suix_queryTransactionBlocks with a FromOrToAddress filter, suix_getAllBalances) were written from the official documentation but have not been run against live Mainnet by the author of this code. Use the live checks and the proof list on Overview.
+            Walrus Memory writes and recall were written from the official documentation. The Tatum gRPC client (GetServiceInfo, GetCheckpoint, ListBalances, ListTransactions) was checked against a local mock gRPC server only, not against Tatum. Use the live checks on Overview: a green Tatum badge appears only after Tatum itself answers all four calls.
           </Notice>
           <Notice title="Single-operator access only">
             The access gate is one shared password. There are no per-user accounts, so row-level policies deny all direct database access instead of scoping rows to a user.
@@ -47,8 +48,8 @@ export default function SettingsPage() {
           <Notice title="Heuristic assessments">
             Assessments are a transparent rule-based comparison between recalled memory text and on-chain counterparties. There is no machine-learning model, and a match is a lead rather than proof.
           </Notice>
-          <Notice title="Sui JSON-RPC is being phased out upstream">
-            Mysten Labs is retiring public JSON-RPC in favour of gRPC and GraphQL. Tatum lists JSON-RPC for Sui Mainnet today; lib/tatum.ts is the one place to migrate if that changes.
+          <Notice title="Transaction history depends on a newer Sui gRPC method">
+            Address history uses LedgerService/ListTransactions, a recent addition to the Sui gRPC API. If Tatum&apos;s node does not serve it, evidence fetch stores balances only and reports the error instead of inventing history.
           </Notice>
         </div>
       </Panel>
